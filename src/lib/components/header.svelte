@@ -2,27 +2,43 @@
 	import musicdrawer from '$lib/assets/canvas.png';
 </script>
 
-<div class="header">
-	<div class="logo"><img src={musicdrawer} width="400" alt="" /></div>
+<header class="header">
+	<div class="logo"><img src={musicdrawer} alt="Music Drawer logo" /></div>
 	<div class="title">Music Drawer</div>
-</div>
+</header>
 
 <style>
 	.header {
-		background-color: beige;
-		height: 22vh;
+		flex: 0 0 auto;
 		display: flex;
-		text-align: center;
-		align-content: center;
-		font-size: 100px;
-	}
-
-	.title {
-		text-align: center;
-		align-content: center;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-start;
+		gap: clamp(0.5rem, 2vw, 2rem);
+		background-color: beige;
+		padding: clamp(0.75rem, 3vw, 2rem);
+		text-align: left;
 	}
 
 	.logo {
-		align-content: center;
+		display: flex;
+		align-items: center;
+	}
+
+	.logo img {
+		width: clamp(140px, 40vw, 400px);
+	}
+
+	.title {
+		font-size: clamp(2rem, 8vw, 6.25rem);
+		line-height: 1.1;
+		word-break: break-word;
+	}
+
+	@media (max-width: 600px) {
+		.header {
+			flex-direction: column;
+			align-items: flex-start;
+		}
 	}
 </style>

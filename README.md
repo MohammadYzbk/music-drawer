@@ -2,6 +2,22 @@
 
 Share music to a group of people in a queue!
 
+## Adding songs
+
+Each queue has an **+ add a song** panel. Paste a Spotify or Anghami link and hit
+**fetch** to pre-fill the title, artist, and cover art, or type every field by hand.
+Queues are saved to the browser's `localStorage`.
+
+### Link import
+
+- **Spotify** works with no setup via the public oEmbed endpoint (title + artwork).
+  To also pull the artist name, create an app at
+  <https://developer.spotify.com/dashboard>, copy `.env.example` to `.env`, and fill
+  in `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`.
+- **Anghami** has no public API and blocks server-side page reads, so its links
+  generally fall back to manual entry.
+- Other links are read via Open Graph tags where the page exposes them.
+
 # sv
 
 Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
