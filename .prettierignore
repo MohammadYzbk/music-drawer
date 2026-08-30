@@ -1,0 +1,12 @@
+node_modules
+.svelte-kit
+build
+.output
+.vercel
+.netlify
+.wrangler
+package-lock.json
+static
+src/lib/fonts
+src/lib/assets
+.sandbox
