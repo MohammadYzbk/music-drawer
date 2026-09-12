@@ -4,21 +4,57 @@
 	import Header from '$lib/components/header.svelte';
 	import SongRow from '$lib/components/song-row.svelte';
 	import AddSong from '$lib/components/add-song.svelte';
+	import { safeHttpUrl } from '$lib';
 
-	type Song = { id: string; title: string; artist: string; cover: string };
+	type Song = {
+		id: string;
+		title: string;
+		artist: string;
+		cover: string;
+		url: string;
+		comment: string;
+	};
 	type Queues = { me: Song[]; you: Song[] };
 
 	const STORAGE_KEY = 'music-drawer:queues';
 
 	const defaults: Queues = {
 		me: [
-			{ id: 'seed-1', title: 'Weird Fishes / Arpeggi', artist: 'Radiohead', cover: '' },
-			{ id: 'seed-2', title: 'Redbone', artist: 'Childish Gambino', cover: '' },
-			{ id: 'seed-3', title: 'Nights', artist: 'Frank Ocean', cover: '' }
+			{
+				id: 'seed-1',
+				title: 'Weird Fishes / Arpeggi',
+				artist: 'Radiohead',
+				cover: '',
+				url: '',
+				comment: ''
+			},
+			{
+				id: 'seed-2',
+				title: 'Redbone',
+				artist: 'Childish Gambino',
+				cover: '',
+				url: '',
+				comment: ''
+			},
+			{ id: 'seed-3', title: 'Nights', artist: 'Frank Ocean', cover: '', url: '', comment: '' }
 		],
 		you: [
-			{ id: 'seed-4', title: 'A Real Hero', artist: 'College & Electric Youth', cover: '' },
-			{ id: 'seed-5', title: 'Motion Sickness', artist: 'Phoebe Bridgers', cover: '' }
+			{
+				id: 'seed-4',
+				title: 'A Real Hero',
+				artist: 'College & Electric Youth',
+				cover: '',
+				url: '',
+				comment: ''
+			},
+			{
+				id: 'seed-5',
+				title: 'Motion Sickness',
+				artist: 'Phoebe Bridgers',
+				cover: '',
+				url: '',
+				comment: ''
+			}
 		]
 	};
 
@@ -40,7 +76,9 @@
 			id: typeof item?.id === 'string' ? item.id : newId(),
 			title: typeof item?.title === 'string' ? item.title : '',
 			artist: typeof item?.artist === 'string' ? item.artist : '',
-			cover: typeof item?.cover === 'string' ? item.cover : ''
+			cover: typeof item?.cover === 'string' ? item.cover : '',
+			url: safeHttpUrl(item?.url),
+			comment: typeof item?.comment === 'string' ? item.comment : ''
 		}));
 	}
 
@@ -74,6 +112,8 @@
 						title={song.title}
 						artist={song.artist}
 						cover={song.cover}
+						url={song.url}
+						comment={song.comment}
 						onremove={() => songs.splice(songs.indexOf(song), 1)}
 					/>
 				{/each}

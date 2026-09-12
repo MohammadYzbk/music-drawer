@@ -1,0 +1,10 @@
+[build]
+	command = "npm run build"
+	# Must match the adapter's output directory. Left unset, the adapter warns
+	# and falls back to this same value.
+	publish = "build"
+
+[build.environment]
+	# Vite 8 requires node ^20.19 || >=22.12, which is newer than some of
+	# Netlify's older build images default to.
+	NODE_VERSION = "22"

@@ -10,12 +10,19 @@ Queues are saved to the browser's `localStorage`.
 
 ### Link import
 
-- **Spotify** works with no setup via the public oEmbed endpoint (title + artwork).
-  To also pull the artist name, create an app at
-  <https://developer.spotify.com/dashboard>, copy `.env.example` to `.env`, and fill
-  in `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`.
-- **Anghami** has no public API and blocks server-side page reads, so its links
-  generally fall back to manual entry.
+Links are read as a link-preview crawler, because that is the request both
+services answer with Open Graph tags: Anghami 406s anything else, and Spotify
+serves an empty web-player shell. Title, artist and cover all come from those
+tags, so **no setup is required** for either service.
+
+- **Spotify** optionally uses the Web API, which returns an exact, structured
+  artist list rather than one parsed from a description. To enable it, create an
+  app at <https://developer.spotify.com/dashboard>, copy `.env.example` to `.env`,
+  and fill in `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`. Without credentials
+  the Open Graph tags are used (640px cover); oEmbed is only a last resort, as it
+  carries no artist field and a smaller thumbnail.
+- **Anghami** has no public API at all. Its square album art is used in place of
+  the wide share card its `og:image` advertises.
 - Other links are read via Open Graph tags where the page exposes them.
 
 # sv

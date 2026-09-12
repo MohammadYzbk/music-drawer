@@ -13,6 +13,12 @@ type Resolved = {
 const UA =
 	'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
+// Both services withhold their Open Graph tags from ordinary clients --
+// Anghami answers 406, Spotify serves a metadata-less web-player shell -- but
+// serve them to the link-preview crawlers they want unfurling their links,
+// which is exactly the job here, so ask as one first.
+const UA_PREVIEW = 'WhatsApp/2.23.20.0';
+
 let cachedToken: { value: string; expires: number } | null = null;
 
 function isBlockedHost(hostname: string): boolean {
@@ -79,6 +85,8 @@ async function resolveSpotify(raw: string): Promise<Resolved | null> {
 	if (!trackId) return null;
 	const canonical = `https://open.spotify.com/track/${trackId}`;
 
+	// The Web API is the best source -- an exact, structured artist list -- but
+	// it needs credentials.
 	const token = await spotifyToken();
 	if (token) {
 		const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
@@ -97,6 +105,12 @@ async function resolveSpotify(raw: string): Promise<Resolved | null> {
 			};
 		}
 	}
+
+	// Without them the track page's own Open Graph tags still carry the title,
+	// the artist and a 640px cover, so they beat oEmbed, which has no artist
+	// field at all and only a small thumbnail.
+	const og = await resolveOpenGraph(new URL(canonical), 'spotify');
+	if (og?.title) return og;
 
 	const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(canonical)}`, {
 		headers: { 'User-Agent': UA },
@@ -127,63 +141,134 @@ function decodeEntities(input: string): string {
 		.replace(/&amp;/g, '&');
 }
 
-function readMeta(html: string, keys: string[]): string {
+type MetaTag = Record<string, string>;
+
+// Attributes are parsed rather than matched by key, because not every site
+// quotes them -- Anghami emits `<meta property=og:url content=https://...>`,
+// where a quoted-only match reads nothing and a loose one lets `og:image`
+// swallow `og:image:width`.
+function parseMetaTags(html: string): MetaTag[] {
+	const tags: MetaTag[] = [];
+	const metaPattern = /<meta\b([^>]*)>/gi;
+	const attrPattern = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'`=<>]+))/g;
+
+	for (const tag of html.matchAll(metaPattern)) {
+		const attrs: MetaTag = {};
+		for (const attr of tag[1].matchAll(attrPattern)) {
+			attrs[attr[1].toLowerCase()] = attr[2] ?? attr[3] ?? attr[4] ?? '';
+		}
+		tags.push(attrs);
+	}
+	return tags;
+}
+
+function readMeta(tags: MetaTag[], keys: string[]): string {
 	for (const key of keys) {
-		const escaped = key.replace(/:/g, '\\:');
-		const patterns = [
-			new RegExp(
-				`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]*\\scontent=["']([^"']*)["']`,
-				'i'
-			),
-			new RegExp(
-				`<meta[^>]+content=["']([^"']*)["'][^>]*\\s(?:property|name)=["']${escaped}["']`,
-				'i'
-			)
-		];
-		for (const pattern of patterns) {
-			const match = html.match(pattern);
-			if (match && match[1]) return decodeEntities(match[1]).trim();
+		for (const tag of tags) {
+			const id = (tag.property ?? tag.name ?? '').toLowerCase();
+			if (id === key && tag.content) return decodeEntities(tag.content).trim();
 		}
 	}
 	return '';
 }
 
+const GENERIC_DESCRIPTOR = /^(song|single|album|ep|playlist|music|track)$/i;
+
+function looksLikeArtist(candidate: string, title: string): boolean {
+	if (!candidate || GENERIC_DESCRIPTOR.test(candidate)) return false;
+	return candidate.toLowerCase() !== title.toLowerCase();
+}
+
+function readArtist(tags: MetaTag[], provider: string, title: string): string {
+	const tagged = readMeta(tags, ['music:musician_description', 'og:audio:artist']);
+	if (tagged) return tagged;
+
+	const description = readMeta(tags, ['og:description', 'twitter:description']);
+
+	// Both services lead the description with the artist and follow it with
+	// interpunct-separated detail: "Artist · song · 1991" on Anghami,
+	// "Artist, Artist · Album · Song · 2015" on Spotify. The interpunct has to
+	// be present, or an arbitrary site's prose description reads as an artist.
+	if (description.includes('·')) {
+		const lead = description.split('·')[0].trim();
+		if (looksLikeArtist(lead, title)) return lead;
+	}
+
+	// Anghami also exposes "Artist - Title | Play on Anghami".
+	if (provider === 'anghami') {
+		const share = readMeta(tags, ['twitter:title']).match(/^(.+?)\s+-\s+.+?\s*\|\s*Play on/i);
+		if (share && looksLikeArtist(share[1].trim(), title)) return share[1].trim();
+	}
+
+	const byline = description.match(/\bby\s+(.+?)(?:\s+on\s+Anghami|\s+[·|]|\s+-\s+|\.$|$)/i);
+	return byline ? byline[1].trim() : '';
+}
+
+// Anghami's og:image is a 600x314 share card with the track name burned into
+// it, which crops badly in a square song row; the album art behind it is
+// reachable by the id the card is generated from.
+function upgradeAnghamiCover(ogImage: string): string {
+	try {
+		const id = new URL(ogImage).searchParams.get('coverartid');
+		if (id && /^\d+$/.test(id)) return `https://artwork.anghcdn.co/webp/?id=${id}&size=640`;
+	} catch {
+		// Not a URL we can rewrite -- keep what the page gave us.
+	}
+	return ogImage;
+}
+
+async function fetchPage(url: URL): Promise<{ html: string; finalUrl: URL } | null> {
+	for (const ua of [UA_PREVIEW, UA]) {
+		let res: Response;
+		try {
+			res = await fetch(url, {
+				headers: {
+					'User-Agent': ua,
+					Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+					'Accept-Language': 'en-US,en;q=0.9'
+				},
+				redirect: 'follow',
+				signal: AbortSignal.timeout(8000)
+			});
+		} catch {
+			continue;
+		}
+		if (!res.ok) continue;
+		return {
+			html: (await res.text()).slice(0, 400000),
+			finalUrl: safeUrl(res.url) ?? url
+		};
+	}
+	return null;
+}
+
 async function resolveOpenGraph(url: URL, provider: string): Promise<Resolved | null> {
-	const res = await fetch(url, {
-		headers: {
-			'User-Agent': UA,
-			Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-			'Accept-Language': 'en-US,en;q=0.9'
-		},
-		redirect: 'follow',
-		signal: AbortSignal.timeout(8000)
-	});
-	if (!res.ok) return null;
+	const page = await fetchPage(url);
+	if (!page) return null;
 
-	const finalUrl = safeUrl(res.url) ?? url;
-	const html = (await res.text()).slice(0, 400000);
+	const tags = parseMetaTags(page.html);
 
-	const title = readMeta(html, ['og:title', 'twitter:title']);
-	const cover = readMeta(html, [
+	// An unknown Anghami id still answers 200, with the site's own landing-page
+	// tags ("Anghami - The world is listening") that would otherwise be filled
+	// into the form as a song. Real song pages are tagged og:type=music.song.
+	if (provider !== 'unknown' && readMeta(tags, ['og:type']) === 'website') return null;
+
+	const title = readMeta(tags, ['og:title', 'twitter:title']);
+	let cover = readMeta(tags, [
 		'og:image:secure_url',
 		'og:image',
 		'twitter:image',
 		'twitter:image:src'
 	]);
-	let artist = readMeta(html, ['music:musician_description', 'og:audio:artist']);
-	const description = readMeta(html, ['og:description', 'twitter:description']);
-	if (!artist && description) {
-		const match = description.match(/\bby\s+(.+?)(?:\s+on\s+Anghami|\s+[·|]|\s+-\s+|\.$|$)/i);
-		if (match) artist = match[1].trim();
-	}
+	if (provider === 'anghami' && cover) cover = upgradeAnghamiCover(cover);
 
 	if (!title && !cover) return null;
 	return {
 		title,
-		artist,
+		artist: readArtist(tags, provider, title),
 		cover,
 		provider,
-		sourceUrl: finalUrl.toString()
+		sourceUrl: page.finalUrl.toString()
 	};
 }
 

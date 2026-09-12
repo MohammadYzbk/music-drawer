@@ -1,5 +1,7 @@
 <script lang="ts">
-	type Draft = { title: string; artist: string; cover: string };
+	import { safeHttpUrl } from '$lib';
+
+	type Draft = { title: string; artist: string; cover: string; url: string; comment: string };
 
 	let { onadd }: { onadd: (song: Draft) => void } = $props();
 
@@ -8,8 +10,12 @@
 	let title = $state('');
 	let artist = $state('');
 	let cover = $state('');
+	let comment = $state('');
 	let status = $state('');
 	let loading = $state(false);
+	// The canonical link the resolver reported, which is tidier than the pasted
+	// one -- tracking parameters stripped, redirects and `spotify:` URIs settled.
+	let sourceUrl = $state('');
 
 	async function fetchFromLink() {
 		const url = link.trim();
@@ -30,6 +36,7 @@
 			title = data.title || title;
 			artist = data.artist || artist;
 			cover = data.cover || cover;
+			sourceUrl = data.sourceUrl || '';
 			status = data.artist
 				? `Loaded from ${data.provider}`
 				: `Loaded from ${data.provider} — add the artist`;
@@ -45,7 +52,9 @@
 		title = '';
 		artist = '';
 		cover = '';
+		comment = '';
 		status = '';
+		sourceUrl = '';
 	}
 
 	function close() {
@@ -59,7 +68,15 @@
 			status = 'A title is required';
 			return;
 		}
-		onadd({ title: title.trim(), artist: artist.trim(), cover: cover.trim() });
+		// Falls back to the pasted link, so a song filled in by hand under a
+		// pasted link still gets one.
+		onadd({
+			title: title.trim(),
+			artist: artist.trim(),
+			cover: cover.trim(),
+			url: safeHttpUrl(sourceUrl) || safeHttpUrl(link),
+			comment: comment.trim()
+		});
 		reset();
 		open = false;
 	}
@@ -76,6 +93,7 @@
 					type="url"
 					placeholder="Paste a Spotify or Anghami link"
 					bind:value={link}
+					oninput={() => (sourceUrl = '')}
 				/>
 				<button
 					class="btn"
@@ -97,6 +115,13 @@
 					<input class="field" type="text" placeholder="Title" bind:value={title} />
 					<input class="field" type="text" placeholder="Artist" bind:value={artist} />
 					<input class="field" type="url" placeholder="Cover art URL" bind:value={cover} />
+					<input
+						class="field"
+						type="text"
+						placeholder="Comment (optional)"
+						maxlength="120"
+						bind:value={comment}
+					/>
 				</div>
 			</div>
 
