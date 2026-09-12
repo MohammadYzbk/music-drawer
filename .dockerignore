@@ -1,0 +1,16 @@
+.git
+.gitignore
+node_modules
+.svelte-kit
+build
+data
+.env
+.env.*
+!.env.example
+.sandbox
+.vscode
+.DS_Store
+Dockerfile
+.dockerignore
+fly.toml
+README.md
