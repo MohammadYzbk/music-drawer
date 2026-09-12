@@ -24,3 +24,6 @@ vite.config.ts.timestamp-*
 
 # Sandbox
 .sandbox
+
+# Server-side song store
+/data

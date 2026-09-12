@@ -1,127 +1,80 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
+	import { invalidateAll } from '$app/navigation';
 	import Header from '$lib/components/header.svelte';
 	import SongRow from '$lib/components/song-row.svelte';
 	import AddSong from '$lib/components/add-song.svelte';
-	import { safeHttpUrl } from '$lib';
+	import type { Queues, Song } from '$lib/types';
+	import type { PageData } from './$types';
 
-	type Song = {
-		id: string;
-		title: string;
-		artist: string;
-		cover: string;
-		url: string;
-		comment: string;
-	};
-	type Queues = { me: Song[]; you: Song[] };
+	let { data }: { data: PageData } = $props();
 
-	const STORAGE_KEY = 'music-drawer:queues';
+	let saveError = $state('');
 
-	const defaults: Queues = {
-		me: [
-			{
-				id: 'seed-1',
-				title: 'Weird Fishes / Arpeggi',
-				artist: 'Radiohead',
-				cover: '',
-				url: '',
-				comment: ''
-			},
-			{
-				id: 'seed-2',
-				title: 'Redbone',
-				artist: 'Childish Gambino',
-				cover: '',
-				url: '',
-				comment: ''
-			},
-			{ id: 'seed-3', title: 'Nights', artist: 'Frank Ocean', cover: '', url: '', comment: '' }
-		],
-		you: [
-			{
-				id: 'seed-4',
-				title: 'A Real Hero',
-				artist: 'College & Electric Youth',
-				cover: '',
-				url: '',
-				comment: ''
-			},
-			{
-				id: 'seed-5',
-				title: 'Motion Sickness',
-				artist: 'Phoebe Bridgers',
-				cover: '',
-				url: '',
-				comment: ''
-			}
-		]
-	};
-
-	let queues = $state<Queues>(structuredClone(defaults));
-
-	const translations = new Map<string, string>([
-		['me', 'Mine'],
-		['you', 'Yours']
-	]);
+	const columns: Array<{ key: keyof Queues; label: string }> = [
+		{ key: 'me', label: 'Mine' },
+		{ key: 'you', label: 'Yours' }
+	];
 
 	function newId(): string {
-		if (browser && 'randomUUID' in crypto) return crypto.randomUUID();
+		if ('randomUUID' in crypto) return crypto.randomUUID();
 		return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 	}
 
-	function normalise(list: unknown): Song[] {
-		if (!Array.isArray(list)) return [];
-		return list.map((item) => ({
-			id: typeof item?.id === 'string' ? item.id : newId(),
-			title: typeof item?.title === 'string' ? item.title : '',
-			artist: typeof item?.artist === 'string' ? item.artist : '',
-			cover: typeof item?.cover === 'string' ? item.cover : '',
-			url: safeHttpUrl(item?.url),
-			comment: typeof item?.comment === 'string' ? item.comment : ''
-		}));
+	async function commit(next: Queues) {
+		try {
+			const res = await fetch('/api/queues', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(next)
+			});
+			if (!res.ok) {
+				saveError = 'Not saved — the server rejected the change';
+				return;
+			}
+			saveError = '';
+			await invalidateAll();
+		} catch {
+			saveError = 'Not saved — could not reach the server';
+		}
 	}
 
-	onMount(() => {
-		try {
-			const raw = localStorage.getItem(STORAGE_KEY);
-			if (!raw) return;
-			const parsed = JSON.parse(raw);
-			if (parsed && (Array.isArray(parsed.me) || Array.isArray(parsed.you))) {
-				queues = { me: normalise(parsed.me), you: normalise(parsed.you) };
-			}
-		} catch {
-			return;
-		}
-	});
+	function addSong(key: keyof Queues, draft: Omit<Song, 'id'>) {
+		const next = structuredClone(data.queues);
+		next[key].push({ id: newId(), ...draft });
+		void commit(next);
+	}
 
-	$effect(() => {
-		const data = JSON.stringify(queues);
-		if (browser) localStorage.setItem(STORAGE_KEY, data);
-	});
+	function removeSong(key: keyof Queues, id: string) {
+		const next = structuredClone(data.queues);
+		next[key] = next[key].filter((song) => song.id !== id);
+		void commit(next);
+	}
 </script>
 
 <Header />
+{#if saveError}
+	<p class="save-error" role="alert">{saveError}</p>
+{/if}
 <main class="main-container">
-	{#each Object.entries(queues) as [id, songs]}
-		<section class="music-recs-container" {id}>
-			<div class="recs-header">{translations.get(id)}</div>
+	{#each columns as column (column.key)}
+		<section class="music-recs-container" id={column.key}>
+			<div class="recs-header">{column.label}</div>
 			<div class="song-list">
-				{#each songs as song (song.id)}
+				{#each data.queues[column.key] as song (song.id)}
 					<SongRow
 						title={song.title}
 						artist={song.artist}
 						cover={song.cover}
 						url={song.url}
 						comment={song.comment}
-						onremove={() => songs.splice(songs.indexOf(song), 1)}
+						onremove={() => removeSong(column.key, song.id)}
 					/>
 				{/each}
-				{#if songs.length === 0}
+				{#if data.queues[column.key].length === 0}
 					<p class="empty">nothing here yet</p>
 				{/if}
 			</div>
-			<AddSong onadd={(song) => songs.push({ id: newId(), ...song })} />
+			<AddSong onadd={(song) => addSong(column.key, song)} />
 		</section>
 	{/each}
 </main>
@@ -177,6 +130,14 @@
 		background-color: black;
 		border: 2px solid transparent;
 		background-clip: content-box;
+	}
+
+	.save-error {
+		flex: 0 0 auto;
+		margin: 0;
+		border-bottom: 3px solid black;
+		background-color: #ffd7d7;
+		padding: clamp(0.5rem, 1.5vw, 0.75rem);
 	}
 
 	.empty {
