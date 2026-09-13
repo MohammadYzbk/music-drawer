@@ -90,7 +90,8 @@
 			<div class="link-row">
 				<input
 					class="field"
-					type="url"
+					type="text"
+					inputmode="url"
 					placeholder="Paste a Spotify or Anghami link"
 					bind:value={link}
 					oninput={() => (sourceUrl = '')}

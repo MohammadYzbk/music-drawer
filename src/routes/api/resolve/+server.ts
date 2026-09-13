@@ -272,8 +272,14 @@ async function resolveOpenGraph(url: URL, provider: string): Promise<Resolved | 
 	};
 }
 
+function extractUrl(raw: string): string {
+	const match = raw.match(/https?:\/\/[^\s<>"']+/i);
+	if (!match) return raw;
+	return match[0].replace(/[.,;:!?)\]}]+$/, '');
+}
+
 function providerFor(raw: string): string {
-	if (/spotify\.com|spotify:track:/.test(raw)) return 'spotify';
+	if (/spotify\.com|spotify\.link|spotify:track:/.test(raw)) return 'spotify';
 	if (/anghami\./.test(raw)) return 'anghami';
 	return 'unknown';
 }
@@ -286,8 +292,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		error(400, 'Expected a JSON body with a "url" field');
 	}
 
-	const raw = typeof payload.url === 'string' ? payload.url.trim() : '';
-	if (!raw) error(400, 'Provide a song link');
+	const input = typeof payload.url === 'string' ? payload.url.trim() : '';
+	if (!input) error(400, 'Provide a song link');
+
+	const raw = extractUrl(input);
 
 	const provider = providerFor(raw);
 
