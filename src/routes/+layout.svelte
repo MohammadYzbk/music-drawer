@@ -41,10 +41,13 @@
 </div>
 
 <style>
+	/* A fixed height rather than a minimum, so the queues scroll inside the
+	   page instead of the page itself growing. */
 	.app {
 		display: flex;
 		flex-direction: column;
-		min-height: 100vh;
-		min-height: 100svh;
+		height: 100vh;
+		height: 100svh;
+		overflow: hidden;
 	}
 </style>

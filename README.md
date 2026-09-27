@@ -6,7 +6,13 @@ Share music to a group of people in a queue!
 
 Each queue has an **+ add a song** panel. Paste a Spotify or Anghami link and hit
 **fetch** to pre-fill the title, artist, and cover art, or type every field by hand.
-Queues are saved to the browser's `localStorage`.
+Queues are saved on the server, in `QUEUES_FILE`.
+
+### Queue colours
+
+The square in each queue's header picks that queue's background colour. Colours
+are shared like the queues, saved to `COLORS_FILE` (by default `colors.json`
+beside the queues file).
 
 ### Link import
 
