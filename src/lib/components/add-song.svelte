@@ -140,7 +140,13 @@
 
 <style>
 	.adder {
-		flex: 0 0 auto;
+		/* Sized to its content, but an open form in a short queue (two stacked
+		   on a phone) scrolls itself rather than squeezing the list out. */
+		flex: 0 1 auto;
+		min-height: 0;
+		max-height: 75%;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		border-top: 3px dashed black;
 		padding: clamp(0.5rem, 1.5vw, 0.75rem);
 		display: flex;
