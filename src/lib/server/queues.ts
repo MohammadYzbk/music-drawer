@@ -1,10 +1,10 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { env } from '$env/dynamic/private';
 import { safeHttpUrl } from '$lib';
 import type { Queues, Song } from '$lib/types';
+import { writeJson } from './store';
 
-const FILE = env.QUEUES_FILE || 'data/queues.json';
+export const FILE = env.QUEUES_FILE || 'data/queues.json';
 
 const defaults: Queues = {
 	me: [
@@ -86,20 +86,6 @@ export async function readQueues(): Promise<Queues> {
 	}
 }
 
-async function persist(queues: Queues): Promise<void> {
-	await mkdir(dirname(FILE), { recursive: true });
-	const temp = `${FILE}.${process.pid}.tmp`;
-	await writeFile(temp, JSON.stringify(queues, null, 2), 'utf8');
-	await rename(temp, FILE);
-}
-
-let chain: Promise<unknown> = Promise.resolve();
-
 export function writeQueues(queues: Queues): Promise<void> {
-	const next = chain.then(
-		() => persist(queues),
-		() => persist(queues)
-	);
-	chain = next.catch(() => {});
-	return next;
+	return writeJson(FILE, queues);
 }
